@@ -1,0 +1,174 @@
+name: Main pull request check
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  require-merged-pull-request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require a merged pull request
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const payload = context.payload;
+            const before = payload.before || "";
+            const after = payload.after || "";
+
+            if (payload.deleted === true || /^0+$/.test(after)) {
+              core.info("Skipping deleted ref.");
+              return;
+            }
+
+            if (!after) {
+              core.setFailed("Push event did not include a commit SHA.");
+              return;
+            }
+
+            function linkHeader(response) {
+              const headers = response.headers || {};
+              return headers.link || headers.Link || "";
+            }
+
+            async function commitsInPush() {
+              if (/^0+$/.test(before)) {
+                core.info("Push has no previous revision; listing history.");
+                return github.paginate(
+                  "GET /repos/{owner}/{repo}/commits",
+                  {
+                    owner: owner,
+                    repo: repo,
+                    sha: after,
+                    per_page: 100,
+                  },
+                );
+              }
+
+              const commits = [];
+              const seen = new Set();
+              let page = 1;
+              let total = null;
+
+              for (;;) {
+                const response = await github.request(
+                  "GET /repos/{owner}/{repo}/compare/{basehead}",
+                  {
+                    owner: owner,
+                    repo: repo,
+                    basehead: before + "..." + after,
+                    per_page: 100,
+                    page: page,
+                  },
+                );
+                const batch = response.data.commits || [];
+                total = response.data.total_commits;
+                let added = 0;
+                for (const commit of batch) {
+                  if (!seen.has(commit.sha)) {
+                    seen.add(commit.sha);
+                    commits.push(commit);
+                    added += 1;
+                  }
+                }
+                const link = linkHeader(response);
+                if (!link.includes('rel="next"') || added === 0) {
+                  break;
+                }
+                page += 1;
+                if (page > 100) {
+                  core.setFailed(
+                    "Commit pagination stopped after 100 pages.",
+                  );
+                  break;
+                }
+              }
+
+              if (typeof total === "number" && commits.length < total) {
+                core.setFailed(
+                  "Compare API did not return every commit in the push ("
+                  + commits.length
+                  + " of "
+                  + total
+                  + ").",
+                );
+              }
+              return commits;
+            }
+
+            let commits;
+            try {
+              commits = await commitsInPush();
+            } catch (error) {
+              const status = error && error.status ? error.status : "unknown";
+              core.setFailed(
+                "Unable to list commits for the push. HTTP status: "
+                + status
+                + ".",
+              );
+              return;
+            }
+
+            for (const commit of commits) {
+              if (!Array.isArray(commit.parents)) {
+                core.setFailed(
+                  "Commit "
+                  + commit.sha
+                  + " did not include parent metadata.",
+                );
+                continue;
+              }
+              if (commit.parents.length === 0) {
+                core.info("Skipping root commit " + commit.sha + ".");
+                continue;
+              }
+
+              let pulls;
+              try {
+                pulls = await github.paginate(
+                  "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
+                  {
+                    owner: owner,
+                    repo: repo,
+                    commit_sha: commit.sha,
+                    per_page: 100,
+                  },
+                );
+              } catch (error) {
+                const status = error && error.status
+                  ? error.status
+                  : "unknown";
+                core.setFailed(
+                  "Unable to list pull requests for commit "
+                  + commit.sha
+                  + ". HTTP status: "
+                  + status
+                  + ".",
+                );
+                continue;
+              }
+
+              const mergedIntoMain = pulls.some(function (pr) {
+                return Boolean(pr.merged_at)
+                  && pr.base
+                  && pr.base.ref === "main";
+              });
+
+              if (!mergedIntoMain) {
+                core.setFailed(
+                  "Commit "
+                  + commit.sha
+                  + " is not associated with a pull request merged into main.",
+                );
+              }
+            }
+
+            core.info("Finished checking commits pushed to main.");

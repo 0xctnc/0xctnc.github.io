@@ -1,0 +1,49 @@
+extends: default
+
+ignore: |
+  node_modules/
+  _site/
+  .jekyll-cache/
+  .sass-cache/
+
+rules:
+  braces:
+    level: error
+  brackets:
+    level: error
+  colons:
+    level: error
+  commas:
+    level: error
+  comments:
+    level: error
+    require-starting-space: true
+    min-spaces-from-content: 2
+  comments-indentation:
+    level: error
+  document-start: disable
+  empty-lines:
+    level: error
+  empty-values:
+    level: error
+  hyphens:
+    level: error
+  indentation:
+    level: error
+  key-duplicates:
+    level: error
+  line-length:
+    max: 120
+    level: error
+    allow-non-breakable-words: true
+  new-line-at-end-of-file:
+    level: error
+  new-lines:
+    level: error
+  octal-values:
+    level: error
+  trailing-spaces:
+    level: error
+  truthy:
+    level: error
+    check-keys: false

@@ -1,0 +1,47 @@
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.secret
+secrets.json
+credentials.json
+credentials.yml
+credentials.yaml
+auth.json
+token.json
+*.token
+.secrets/
+.npmrc
+.netrc
+.pypirc
+
+# OS clutter
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor clutter
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.code-workspace
+
+# Static-site build output
+_site/
+.jekyll-cache/
+.sass-cache/
+node_modules/

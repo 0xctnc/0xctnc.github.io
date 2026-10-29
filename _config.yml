@@ -1,0 +1,5 @@
+exclude:
+  - .github/
+  - .yamllint.yml
+  - README.md
+  - SECURITY.md
